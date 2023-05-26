@@ -62,6 +62,15 @@ class DataCenterAgent:
                 alpha[t] = 10*0.2*4/(1.2*5*consumption_forecast[t])
         return alpha
 
+    def cout(self,
+                         manager_signal: np.ndarray,  # in R^nbr_future_time_slots
+                         consumption_forecast: np.ndarray,  # in R+^nbr_future_time_slots
+                         hotwater_price_forecast: np.ndarray  # in R+^nbr_future_time_slots
+                         ) -> float:
+        alpha = self.take_my_decision(manager_signal=manager_signal, consumption_forecast=consumption_forecast,
+                                                        hotwater_price_forecast=hotwater_price_forecast)
+        cout = np.sum((hotwater_price_forecast*1.2/0.2*1.25*consumption_forecast - manager_signal*consumption_forecast*5.0/(4*0.5*0.2))*alpha)
+        return cout
 
     def take_baseline_decision(self,
                                manager_signal: np.ndarray,  # in R^nbr_future_time_slots
