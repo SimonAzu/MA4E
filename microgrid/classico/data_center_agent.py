@@ -42,7 +42,7 @@ class DataCenterAgent:
                       consumption_forecast: np.ndarray,     # in R+^nbr_future_time_slots
                       hotwater_price_forecast: np.ndarray   # in R+^nbr_future_time_slots
                       ) -> np.ndarray:  # in [0,1]^nbr_future_time_slots (heat pump activation profile)
-        baseline_decision = self.take_baseline_decision(manager_signal=manager_signal,
+        baseline_decision = self.take_my_decision(manager_signal=manager_signal, consumption_forecast=consumption_forecast,
                                                         hotwater_price_forecast=hotwater_price_forecast)
         # use format and feasibility "checker"
         check_msg = self.check_decision(load_profile=baseline_decision, consumption_forecast=consumption_forecast)
@@ -50,6 +50,18 @@ class DataCenterAgent:
         print(f"Format or infeas. errors: {check_msg}")
 
         return baseline_decision
+
+    def take_my_decision(self,
+                      manager_signal: np.ndarray,  # in R^nbr_future_time_slots
+                      consumption_forecast: np.ndarray,  # in R+^nbr_future_time_slots
+                      hotwater_price_forecast: np.ndarray  # in R+^nbr_future_time_slots
+                      ) -> np.ndarray:  # in [0,1]^nbr_future_time_slots (heat pump activation profile)
+        alpha = np.zeros(self.nbr_future_time_slots)
+        for t in range(self.nbr_future_time_slots):
+            if(hotwater_price_forecast[t]*1.2/0.2*1.25*consumption_forecast[t] - manager_signal[t]*consumption_forecast[t]*5.0/(4*0.5*0.2) >= 0):
+                alpha[t] = 10*0.2*4/(1.2*5*consumption_forecast[t])
+        return alpha
+
 
     def take_baseline_decision(self,
                                manager_signal: np.ndarray,  # in R^nbr_future_time_slots
