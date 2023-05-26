@@ -69,7 +69,7 @@ class DataCenterAgent:
             ) -> float:
         alpha = self.take_my_decision(manager_signal=manager_signal, consumption_forecast=consumption_forecast,
                                                         hotwater_price_forecast=hotwater_price_forecast)
-        cout = np.sum((hotwater_price_forecast*1.2/0.2*1.25*consumption_forecast - manager_signal*consumption_forecast*5.0/(4*0.5*0.2))*alpha)
+        cout = np.sum((hotwater_price_forecast*1.2/0.2*1.25*consumption_forecast - manager_signal*consumption_forecast*5.0/(4*0.5*0.2))*alpha + (1+1/(4*0.5))*consumption_forecast)
         return cout
 
     def take_baseline_decision(self,
