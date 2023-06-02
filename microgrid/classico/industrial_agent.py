@@ -2,8 +2,12 @@ import datetime
 from microgrid.environments.industrial.industrial_env import IndustrialEnv
 from microgrid.agents.internal.check_feasibility import check_industrial_site_feasibility
 import numpy as np
+from pulp import *
+T=48
+ind = [i for i in range(T)]
+ind1 = [i for i in range(T+1)]
 
-
+rd,rc = 0.95,0.95
 class IndustrialAgent:
     def __init__(self, env: IndustrialEnv):
         self.env = env
@@ -19,13 +23,59 @@ class IndustrialAgent:
                       soc: float,                        # in [0, battery_capacity]
                       consumption_forecast: np.ndarray   # in R+^nbr_future_time_slots
                       ) -> np.ndarray:                   # in R^nbr_future_time_slots (battery power profile)
-        baseline_decision = self.take_baseline_decision(soc=soc, manager_signal=manager_signal)
+        baseline_decision = self.take_my_decision(soc=soc, manager_signal=manager_signal,consumption_forecast=consumption_forecast)
         # use format and feasibility "checker"
         check_msg = self.check_decision(load_profile=baseline_decision)
         # format or infeasiblity pb? Look at the check_msg
         print(f"Format or infeas. errors: {check_msg}")
 
         return baseline_decision
+
+    T=48
+    rc, rd = 0.95, 0.95
+    ind = [i for i in range(T)]
+    def take_my_decision(self,
+                     soc: float,                 # in [0, battery_capacity]
+                          manager_signal: np.ndarray,  # in R^nbr_future_time_slots
+                          consumption_forecast) -> np.ndarray:
+        bin_var = LpVariable.dicts("bin", ind, cat="Continuous")  # stockage supp d'energie
+        bout_var = LpVariable.dicts("bout", ind, cat="Continuous")  # stockage négatif d'energie
+        bst_var = LpVariable.dicts("bst", ind1, cat="Continious")  # etat de stockage de la batterie
+        g_var = LpVariable.dicts("g", ind, cat="Continuous")
+
+        prob = LpProblem(name="Optimisation_consommation_centrale", sense=LpMinimize)  # On cherche à minimiser
+        prob += lpSum([g_var[t]*manager_signal[t] for t in range(T)])
+
+        for t in range(T) :
+            prob += bst_var[t + 1] == bst_var[t] + (- (1/rd)*bout_var[t] + rc*bin_var[t])*delta_t/datetime.timedelta(hours = 1)
+            prob += g_var[t] + bout_var[t] == consumption_forecast[t] + bin_var[t]
+            prob += g_var[t] >= 0
+
+            prob += bst_var[t] >= 0
+            prob += bin_var[t] >= 0
+            prob += bout_var[t] >= 0
+            prob += bst_var[t] <= self.battery_capacity
+            prob += bin_var[t] <= self.battery_pmax
+            prob += bout_var[t] <= self.battery_pmax
+
+        prob+= bst_var[0]==soc
+        prob += bst_var[T] >= 0
+        prob+= bst_var[T] <= self.battery_capacity
+
+
+
+
+        prob.solve()
+        print("Status:", LpStatus[prob.status])
+        baseline_decision = [g_var[t].varValue for t in range(T)]
+        soc_decision = [bst_var[t].varValue for t in range(T+1)]
+        prob.writeLP("Industrial")
+        print((baseline_decision-consumption_forecast).tolist())
+        print(soc_decision)
+
+        return np.array(baseline_decision)-consumption_forecast
+
+
 
     def take_baseline_decision(self,
                                soc: float,                 # in [0, battery_capacity]
@@ -56,7 +106,7 @@ class IndustrialAgent:
                 current_decision = min(current_decision,
                                        (self.battery_capacity - current_soc) / self.battery_efficiency)
             if current_decision < 0:  # with battery soc=0 state when discharging
-                current_decision = max(current_decision, current_soc * self.battery_efficiency)
+                current_decision = max(current_decision, -current_soc * self.battery_efficiency)
             baseline_decision[t] = current_decision
             # update current value of SOC
             current_soc += baseline_decision[t] * self.delta_t / datetime.timedelta(hours=1)

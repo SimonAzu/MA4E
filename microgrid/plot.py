@@ -3,6 +3,8 @@
 Created on Tue Jun 19 11:41:04 2018
 
 @author: B57876
+Louis-Aitor Donval
+Simon Azuélos
 """
 
 # Plot functions
